@@ -1,4 +1,4 @@
-.PHONY: build test run clean docker-up docker-down docker-api run-api run-api-local openapi-export playwright-install playwright-test lint lint-fix typecheck mcp playwright-py-install
+.PHONY: build test run clean docker-up docker-down docker-api run-api run-api-local openapi-export playwright-install playwright-test lint lint-fix typecheck mcp mpc playwright-py-install
 
 # Install locked dependencies (dev) and build wheel/sdist
 build:
@@ -26,6 +26,8 @@ typecheck:
 # Start MCP stdio server (configure in Cursor / Claude Desktop via command below)
 mcp:
 	pdm run agentic-mcp-server
+
+mpc: mcp
 
 run:
 	pdm run python -m agentic_test

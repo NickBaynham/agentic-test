@@ -17,7 +17,7 @@ This repository includes an **MCP server** that exposes safe, typed tools so an 
 - **Install:** `make build` and `make playwright-py-install` (Python Playwright browser binaries; Chromium is enough for API-only tests).
 - **Quality gates:** `make lint` / `make lint-fix` (Ruff, scoped to the harness + its tests), `make typecheck` (mypy strict on `agentic_test.ai_api_tester`).
 - **Tests:** `make test` runs the full pytest suite with **coverage** for `agentic_test.ai_api_tester`.
-- **Run MCP (stdio):** `make mcp` (runs `pdm run agentic-mcp-server`). Wire your MCP client to that command with cwd = repository root. In a terminal, stop with **one** Ctrl+C and wait; repeated interrupts during shutdown can still print asyncio noise on some Python versions.
+- **Run MCP (stdio):** `make mcp` (runs `pdm run agentic-mcp-server`). For **Claude Desktop**, prefer **`/path/to/repo/.venv/bin/agentic-mcp-server`** as the command—some clients do not pass `cwd`, and then `pdm run` fails with “pyproject.toml has not been initialized”. See [docs/mcp-testing-guide.md](docs/mcp-testing-guide.md). In a terminal, stop with **one** Ctrl+C and wait; repeated interrupts during shutdown can still print asyncio noise on some Python versions.
 - **Adding a tool:** implement logic in [`handlers.py`](src/agentic_test/ai_api_tester/handlers.py), register in [`server.py`](src/agentic_test/ai_api_tester/server.py) with `@mcp.tool()`, return **JSON strings**, and add unit tests under [`tests/ai_api_tester/`](tests/ai_api_tester/). Never add generic shell execution.
 
 ### For testers / QA

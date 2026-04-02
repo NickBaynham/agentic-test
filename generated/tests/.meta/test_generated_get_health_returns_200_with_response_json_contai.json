@@ -1,0 +1,10 @@
+{
+  "scenario": "GET /health returns 200 with response JSON containing key status",
+  "endpoint": "/health",
+  "http_method": "GET",
+  "expected_status": 200,
+  "response_json_keys": [
+    "status"
+  ],
+  "generated_at": "2026-04-02T20:33:11.381454+00:00"
+}
