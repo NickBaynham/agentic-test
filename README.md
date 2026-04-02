@@ -10,6 +10,7 @@ See **[CHANGELOG.md](CHANGELOG.md)** for a history of what was added and when.
 - **[PDM](https://pdm-project.org/latest/)** — package and environment manager
 - **GNU Make** — macOS and Linux usually include it; on Windows, use WSL, Git Bash, or another environment that provides `make`
 - **Docker** and **Docker Compose** — for MongoDB and/or the full API stack ([Docker Desktop](https://docs.docker.com/desktop/) or equivalent)
+- **Node.js** 18+ and **npm** — for [Playwright](https://playwright.dev/) API tests under [`playwright/`](playwright/)
 
 Install PDM (pick one):
 
@@ -34,13 +35,21 @@ Install PDM (pick one):
 
    Variables are documented in [.env.example](.env.example). The API uses [pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) to read `.env` from the project root (next to `pyproject.toml`). Values already set in the process environment are not overwritten by `.env`.
 
-4. **Run tests**:
+4. **Run Python tests**:
 
    ```bash
    make test
    ```
 
-5. **Run the demo CLI** (optional):
+5. **Install Playwright and run HTTP API tests** (optional; needs Docker for MongoDB):
+
+   ```bash
+   make playwright-test
+   ```
+
+   The first run downloads browser binaries used by the Playwright test runner (API tests use the `request` fixture only, but the runner still expects those installs). See [Playwright API testing](#playwright-api-testing).
+
+6. **Run the demo CLI** (optional):
 
    ```bash
    make run
@@ -149,6 +158,8 @@ make docker-down
 | `make run-api` | `docker-up` then run the API on the host with `microblog-api`. |
 | `make run-api-local` | Run the API on the host only (MongoDB must be reachable). |
 | `make openapi-export` | Write `docs/openapi.json` and `docs/openapi.yaml` from the FastAPI app. |
+| `make playwright-install` | `npm ci` and `npx playwright install` in [`playwright/`](playwright/). |
+| `make playwright-test` | Install Playwright deps, then run `npx playwright test` (starts MongoDB + API on **127.0.0.1:18080** unless skipped; see below). |
 
 PDM equivalents: `pdm sync --dev`, `pdm run pytest`, `pdm run microblog-api`, `pdm run agentic-test`.
 
@@ -167,7 +178,13 @@ agentic-test/
 ├── pyproject.toml
 ├── pdm.lock
 ├── scripts/
-│   └── export_openapi.py
+│   ├── export_openapi.py
+│   └── run-api-for-playwright.sh   # MongoDB + Uvicorn for Playwright webServer
+├── playwright/
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── playwright.config.ts
+│   └── tests/api/messages.spec.ts
 ├── .env.example
 ├── src/agentic_test/
 │   ├── __init__.py
@@ -196,9 +213,51 @@ PDM keeps a virtualenv under **`.venv`** (gitignored). Do not commit **`.env`**.
 
 - **CLI** (`make run`): `APP_ENV`, `DEBUG` (see [.env.example](.env.example)).
 - **Microblog API**: `MONGODB_URI`, `MONGODB_DATABASE`, `MESSAGES_COLLECTION`, `API_HOST`, `API_PORT`, `MONGODB_PING_ON_STARTUP`, `UVICORN_RELOAD`.
+- **Playwright** (optional): `PLAYWRIGHT_SKIP_WEBSERVER`, `API_BASE_URL`, `PLAYWRIGHT_API_PORT` (see [Playwright API testing](#playwright-api-testing)).
 - In CI, set the same variables in the job environment instead of committing `.env`.
 
 ## Tests
 
+### Python (`pytest`)
+
 - **Unit / API tests** use [mongomock](https://github.com/mongomock/mongomock) so the suite does not require a live MongoDB (`tests/conftest.py` patches `pymongo.MongoClient` and sets `MONGODB_PING_ON_STARTUP=false` for pytest).
-- For manual or pipeline checks against **real** MongoDB, start the database (for example `make docker-up`), run the API, and drive it with HTTP clients or contract tests of your choice; the **OpenAPI** spec documents the contract.
+
+### Playwright API testing
+
+End-to-end HTTP checks run against a **real** MongoDB and FastAPI process. The Playwright config ([`playwright/playwright.config.ts`](playwright/playwright.config.ts)) uses [`webServer`](https://playwright.dev/docs/test-webserver) to run [`scripts/run-api-for-playwright.sh`](scripts/run-api-for-playwright.sh): it starts the Compose **`mongo`** service, waits until it answers `ping`, then runs **Uvicorn** on **`127.0.0.1:18080`** so the suite does not fight with a dev server on port **8000**.
+
+**Commands**
+
+```bash
+make playwright-install   # once per machine / CI image
+make playwright-test      # install + run all Playwright tests
+```
+
+Or manually:
+
+```bash
+cd playwright && npm ci && npx playwright install && npx playwright test
+```
+
+**Environment variables**
+
+| Variable | Purpose |
+| -------- | ------- |
+| `PLAYWRIGHT_SKIP_WEBSERVER` | If set (any value), Playwright does **not** start Mongo/API; you must run the stack yourself and point `API_BASE_URL` at it. |
+| `API_BASE_URL` | Base URL for requests (default `http://127.0.0.1:18080` when `PLAYWRIGHT_API_PORT` is default). |
+| `PLAYWRIGHT_API_PORT` | Port passed to the startup script and used in the default `API_BASE_URL` (default **`18080`**). |
+| `CI` | Many CI systems set `CI=1`. The config treats only `1`, `true`, or `yes` (case-insensitive) as CI so that a shell default like `CI=false` does not break `webServer.reuseExistingServer`. In CI, Playwright **always** starts its own server on the chosen port (no reuse). |
+
+**What is covered**
+
+The spec [`playwright/tests/api/messages.spec.ts`](playwright/tests/api/messages.spec.ts) exercises `GET /health`, Swagger at `/`, `GET /openapi.json`, full CRUD on `/messages`, list query parameters, validation **422**, and **404** cases. Tests in the file run **serially** against one shared database.
+
+**Requirements**
+
+- **Docker** available to the user running tests (for MongoDB).
+- **`pdm`** on `PATH` (the startup script runs `pdm run uvicorn …`).
+- **Node/npm** as above.
+
+### Manual checks
+
+- For ad hoc exploration against **real** MongoDB, start the database (for example `make docker-up`), run the API, and drive it with HTTP clients; the **OpenAPI** spec documents the contract.

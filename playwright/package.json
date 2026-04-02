@@ -1,0 +1,13 @@
+{
+  "name": "agentic-test-playwright-api",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Playwright API tests for the microblog service",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1"
+  }
+}

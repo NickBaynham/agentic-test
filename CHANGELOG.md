@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file. The format is l
 
 ## [0.1.0] — 2026-04-02
 
+### Added (Playwright)
+
+- **[Playwright](https://playwright.dev/)** API test package under [`playwright/`](playwright/) ([`@playwright/test`](https://www.npmjs.com/package/@playwright/test)), with [`playwright/tests/api/messages.spec.ts`](playwright/tests/api/messages.spec.ts) covering health, Swagger, OpenAPI, CRUD, list/sort/pagination, validation, and 404 behavior against a **live** stack.
+- **[`scripts/run-api-for-playwright.sh`](scripts/run-api-for-playwright.sh)** — brings up Compose **MongoDB**, waits for `mongosh` ping, then runs Uvicorn on **`127.0.0.1:${PLAYWRIGHT_API_PORT:-18080}`** for Playwright’s `webServer`.
+- **Make targets**: `playwright-install`, `playwright-test`; **`make clean`** also removes `playwright/test-results` and `playwright/playwright-report`.
+- **Docs**: README prerequisites, onboarding step, Make table, configuration table, and this changelog entry.
+
 ### Added
 
 - **Microblog REST API** ([FastAPI](https://fastapi.tiangolo.com/)) storing messages in **MongoDB** via [PyMongo](https://pymongo.readthedocs.io/).

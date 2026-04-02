@@ -205,3 +205,10 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Node / Playwright (API tests)
+node_modules/
+playwright/node_modules/
+playwright/test-results/
+playwright/playwright-report/
+playwright/.cache/
