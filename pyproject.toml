@@ -1,16 +1,22 @@
 [project]
 name = "agentic-test"
 version = "0.1.0"
-description = "A MCP enabled testing framework that demonstrates agentic testing"
+description = "MCP-oriented testing demo with a MongoDB-backed microblog REST API (FastAPI)"
 readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.11"
 dependencies = [
     "python-dotenv>=1.0.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pymongo>=4.6.0",
+    "pydantic-settings>=2.0.0",
+    "email-validator>=2.0.0",
 ]
 
 [project.scripts]
 agentic-test = "agentic_test.main:main"
+microblog-api = "agentic_test.api.cli:main"
 
 [build-system]
 requires = ["pdm-backend"]
@@ -22,6 +28,9 @@ package-dir = "src"
 [tool.pdm.dev-dependencies]
 dev = [
     "pytest>=8.0",
+    "httpx>=0.27.0",
+    "mongomock>=4.1.0",
+    "pyyaml>=6.0",
 ]
 
 [tool.pytest.ini_options]

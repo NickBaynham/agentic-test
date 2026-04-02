@@ -1,0 +1,13 @@
+.git
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+dist
+build
+.env
+*.md
+!README.md
+.cursor
+docs
