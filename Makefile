@@ -1,12 +1,31 @@
-.PHONY: build test run clean docker-up docker-down docker-api run-api run-api-local openapi-export playwright-install playwright-test
+.PHONY: build test run clean docker-up docker-down docker-api run-api run-api-local openapi-export playwright-install playwright-test lint lint-fix typecheck mcp playwright-py-install
 
 # Install locked dependencies (dev) and build wheel/sdist
 build:
 	pdm sync --dev
 	pdm build
 
+# Python Playwright browsers (required for generated API tests and harness integration tests)
+playwright-py-install:
+	pdm run playwright install chromium
+
 test:
-	pdm run pytest
+	pdm run pytest tests --cov=agentic_test.ai_api_tester --cov-report=term-missing -q
+
+lint:
+	pdm run ruff check src/agentic_test/ai_api_tester tests/ai_api_tester
+	pdm run ruff format --check src/agentic_test/ai_api_tester tests/ai_api_tester
+
+lint-fix:
+	pdm run ruff check --fix src/agentic_test/ai_api_tester tests/ai_api_tester
+	pdm run ruff format src/agentic_test/ai_api_tester tests/ai_api_tester
+
+typecheck:
+	pdm run mypy src/agentic_test/ai_api_tester
+
+# Start MCP stdio server (configure in Cursor / Claude Desktop via command below)
+mcp:
+	pdm run agentic-mcp-server
 
 run:
 	pdm run python -m agentic_test

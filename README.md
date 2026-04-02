@@ -4,13 +4,72 @@ A demo repository for MCP-oriented testing ideas, plus a **MongoDB-backed microb
 
 See **[CHANGELOG.md](CHANGELOG.md)** for a history of what was added and when.
 
+## AI API testing MCP harness (Python-only)
+
+This repository includes an **MCP server** that exposes safe, typed tools so an LLM can introspect the microblog API, **generate Playwright Python tests** that use only **`APIRequestContext`** (no browser UI), save them under **`generated/tests/`**, run them with **pytest**, and inspect structured results. Implementation lives in [`src/agentic_test/ai_api_tester/`](src/agentic_test/ai_api_tester/).
+
+**Full walkthrough:** [docs/mcp-testing-guide.md](docs/mcp-testing-guide.md) — setup, client configuration, designing scenarios, running tests via MCP, and troubleshooting.
+
+**Layout:** `generated/tests/` (machine-writable), `generated/history/` (backups on update), `generated/artifacts/latest/` (JUnit + JSON report from the last run), `tests/handwritten_api/` (human-owned, read-only to `update_generated_test`), [`prompts/playwright_api_test_generation.md`](prompts/playwright_api_test_generation.md) (authoring checklist).
+
+### For developers
+
+- **Install:** `make build` and `make playwright-py-install` (Python Playwright browser binaries; Chromium is enough for API-only tests).
+- **Quality gates:** `make lint` / `make lint-fix` (Ruff, scoped to the harness + its tests), `make typecheck` (mypy strict on `agentic_test.ai_api_tester`).
+- **Tests:** `make test` runs the full pytest suite with **coverage** for `agentic_test.ai_api_tester`.
+- **Run MCP (stdio):** `make mcp` (runs `pdm run agentic-mcp-server`). Wire your MCP client to that command with cwd = repository root. In a terminal, stop with **one** Ctrl+C and wait; repeated interrupts during shutdown can still print asyncio noise on some Python versions.
+- **Adding a tool:** implement logic in [`handlers.py`](src/agentic_test/ai_api_tester/handlers.py), register in [`server.py`](src/agentic_test/ai_api_tester/server.py) with `@mcp.tool()`, return **JSON strings**, and add unit tests under [`tests/ai_api_tester/`](tests/ai_api_tester/). Never add generic shell execution.
+
+### For testers / QA
+
+- **Scenarios:** describe *Given / When / Then*, HTTP method, path, expected status, and important JSON keys. Follow [`prompts/playwright_api_test_generation.md`](prompts/playwright_api_test_generation.md).
+- **Inspect workspace:** use MCP `list_tests` / `read_test_file`, or open `generated/tests/` and `.meta` JSON sidecars in the IDE.
+- **Runs:** after `run_test` or `run_all_generated_tests`, use `get_test_artifacts` or open `generated/artifacts/latest/` for `junit.xml` and `pytest-report.json`.
+
+### For AI agents and end users
+
+**Capabilities**
+
+- Discover service health and OpenAPI from a running base URL.
+- List/read generated and handwritten API tests (writes only under `generated/`).
+- Generate pytest modules using **sync `APIRequestContext`** and `API_BASE_URL` from the environment.
+- Run one file or the whole generated suite (`pytest -k` filter supported).
+- Start/stop **allow-listed** Docker Compose profiles (`mongo`, `full`) only—no arbitrary commands.
+
+**MCP tools (JSON string results)**
+
+| Tool | Role |
+| ---- | ---- |
+| `get_service_info` | Project metadata + `GET /health` probe. |
+| `get_api_context` | Fetch `openapi.json` (or errors) from the target. |
+| `list_tests` | Paths under `tests/handwritten_api/` and `generated/tests/`. |
+| `read_test_file` | Contents + metadata if path is allow-listed. |
+| `update_generated_test` | Patch a generated file; previous revision to `generated/history/`. |
+| `delete_generated_test` | Remove generated test + sidecar metadata. |
+| `generate_api_test_from_scenario` | Deterministic template + `.meta` JSON. |
+| `run_test` | pytest on one file → artifacts + summary JSON. |
+| `run_all_generated_tests` | pytest on `generated/tests/` with optional `-k` filter. |
+| `get_test_artifacts` | Filenames in `generated/artifacts/latest/`. |
+| `start_target_stack` | `profile`: `mongo` or `full` (Compose allow-list). |
+| `stop_target_stack` | `docker compose down` for this repo’s compose file. |
+
+**Example workflow (natural language → tools)**
+
+1. `start_target_stack` with `mongo`, start the API locally (`make run-api-local`) or `start_target_stack` with `full`.
+2. `get_service_info` / `get_api_context` using the correct `API_BASE_URL`.
+3. `generate_api_test_from_scenario` for e.g. `GET /messages` with expected `200` and keys `items`, `total`.
+4. `run_test` on the returned relative path with the same `api_base_url`.
+5. `get_test_artifacts` to collect reports; iterate with `update_generated_test` if needed.
+
+> **Note:** The separate **Node + Playwright** package under [`playwright/`](playwright/) is optional and legacy for this repo; the MCP harness and generated tests are **Python + Playwright** only.
+
 ## Prerequisites
 
 - **Python** 3.11 or newer ([python.org](https://www.python.org/downloads/) or your OS package manager)
 - **[PDM](https://pdm-project.org/latest/)** — package and environment manager
 - **GNU Make** — macOS and Linux usually include it; on Windows, use WSL, Git Bash, or another environment that provides `make`
 - **Docker** and **Docker Compose** — for MongoDB and/or the full API stack ([Docker Desktop](https://docs.docker.com/desktop/) or equivalent)
-- **Node.js** 18+ and **npm** — for [Playwright](https://playwright.dev/) API tests under [`playwright/`](playwright/)
+- **Node.js** 18+ and **npm** — optional, only for the legacy [Playwright](https://playwright.dev/) **TypeScript** tests under [`playwright/`](playwright/) (not required for the Python MCP harness)
 
 Install PDM (pick one):
 
@@ -41,15 +100,21 @@ Install PDM (pick one):
    make test
    ```
 
-5. **Install Playwright and run HTTP API tests** (optional; needs Docker for MongoDB):
+5. **Install Python Playwright browsers** (for generated API tests and the MCP harness):
+
+   ```bash
+   make playwright-py-install
+   ```
+
+6. **Install Playwright and run HTTP API tests** (optional **Node** path; needs Docker for MongoDB):
 
    ```bash
    make playwright-test
    ```
 
-   The first run downloads browser binaries used by the Playwright test runner (API tests use the `request` fixture only, but the runner still expects those installs). See [Playwright API testing](#playwright-api-testing).
+   See [Playwright API testing](#playwright-api-testing).
 
-6. **Run the demo CLI** (optional):
+7. **Run the demo CLI** (optional):
 
    ```bash
    make run
@@ -149,7 +214,7 @@ make docker-down
 | Target | Purpose |
 | ------ | ------- |
 | `make build` | `pdm sync --dev` and `pdm build` (wheel/sdist under `dist/`). |
-| `make test` | `pytest` (includes API tests with **mongomock**; no Docker required). |
+| `make test` | `pytest` for `tests/` with **coverage** on `agentic_test.ai_api_tester`. |
 | `make run` | Demo CLI: `python -m agentic_test`. |
 | `make clean` | Remove `dist/`, `build/`, pytest/ruff caches, `__pycache__`. |
 | `make docker-up` | Start **MongoDB** via Compose (`mongo` service). |
@@ -158,6 +223,10 @@ make docker-down
 | `make run-api` | `docker-up` then run the API on the host with `microblog-api`. |
 | `make run-api-local` | Run the API on the host only (MongoDB must be reachable). |
 | `make openapi-export` | Write `docs/openapi.json` and `docs/openapi.yaml` from the FastAPI app. |
+| `make playwright-py-install` | `pdm run playwright install chromium` (Python Playwright). |
+| `make lint` / `make lint-fix` | Ruff on `ai_api_tester` + `tests/ai_api_tester`. |
+| `make typecheck` | mypy (strict) on `src/agentic_test/ai_api_tester`. |
+| `make mcp` | Start the MCP stdio server (`agentic-mcp-server`). |
 | `make playwright-install` | `npm ci` and `npx playwright install` in [`playwright/`](playwright/). |
 | `make playwright-test` | Install Playwright deps, then run `npx playwright test` (starts MongoDB + API on **127.0.0.1:18080** unless skipped; see below). |
 
@@ -173,10 +242,14 @@ agentic-test/
 ├── README.md
 ├── docker-compose.yml
 ├── docs/
+│   ├── mcp-testing-guide.md  # MCP setup, design, run tests
 │   ├── openapi.json       # generated; run make openapi-export
 │   └── openapi.yaml
 ├── pyproject.toml
 ├── pdm.lock
+├── generated/             # MCP harness workspace (tests, history, artifacts)
+├── prompts/
+│   └── playwright_api_test_generation.md
 ├── scripts/
 │   ├── export_openapi.py
 │   └── run-api-for-playwright.sh   # MongoDB + Uvicorn for Playwright webServer
@@ -191,6 +264,10 @@ agentic-test/
 │   ├── __main__.py
 │   ├── main.py              # CLI entry (dotenv + demo print)
 │   ├── config.py            # shared settings (API + future use)
+│   ├── ai_api_tester/       # MCP server + harness (Playwright API tests)
+│   │   ├── server.py
+│   │   ├── handlers.py
+│   │   └── ...
 │   ├── api/
 │   │   ├── app.py           # FastAPI app, lifespan, Swagger at /
 │   │   ├── cli.py           # Uvicorn entry for microblog-api script

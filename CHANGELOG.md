@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file. The format is l
 
 ## [0.1.0] — 2026-04-02
 
+### Added (MCP AI API testing harness)
+
+- **`agentic_test.ai_api_tester`**: MCP server ([FastMCP](https://github.com/modelcontextprotocol/python-sdk) / `mcp`) exposing allow-listed tools for introspection, sandboxed workspace I/O under `generated/`, deterministic **Playwright sync `APIRequestContext`** test generation, **pytest** execution with JUnit + **pytest-json-report**, structured summaries, and **Docker Compose** `mongo` / `full` profiles only ([`docker_manager.py`](src/agentic_test/ai_api_tester/docker_manager.py)).
+- **Entry point:** `pdm run agentic-mcp-server` / `make mcp`.
+- **Tooling:** Ruff + mypy (strict) configuration in `pyproject.toml`; `make lint`, `make typecheck`, `make test` (with coverage on the harness package), `make playwright-py-install` for Python Playwright binaries.
+- **Tests:** [`tests/ai_api_tester/`](tests/ai_api_tester/) (sandbox, parser, runner, Docker mocks, MCP app smoke, HTTPServer integration).
+- **Docs:** README sections for developers, QA, and AI agents; [`prompts/playwright_api_test_generation.md`](prompts/playwright_api_test_generation.md); [`docs/mcp-testing-guide.md`](docs/mcp-testing-guide.md) (MCP setup, test design, execution, troubleshooting).
+- **Handwritten API tests:** [`tests/handwritten_api/`](tests/handwritten_api/) (skipped unless `API_BASE_URL` is set).
+
 ### Added (Playwright)
 
 - **[Playwright](https://playwright.dev/)** API test package under [`playwright/`](playwright/) ([`@playwright/test`](https://www.npmjs.com/package/@playwright/test)), with [`playwright/tests/api/messages.spec.ts`](playwright/tests/api/messages.spec.ts) covering health, Swagger, OpenAPI, CRUD, list/sort/pagination, validation, and 404 behavior against a **live** stack.

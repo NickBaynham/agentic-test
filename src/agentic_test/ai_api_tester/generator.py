@@ -1,0 +1,126 @@
+"""Deterministic Playwright sync APIRequestContext test generation."""
+
+from __future__ import annotations
+
+import re
+import textwrap
+from datetime import UTC, datetime
+from typing import Any, Literal
+
+HttpMethod = Literal["GET", "POST", "PATCH", "DELETE", "PUT"]
+
+
+def _slug(text: str, max_len: int = 48) -> str:
+    s = re.sub(r"[^a-zA-Z0-9]+", "_", text.lower()).strip("_")
+    return (s[:max_len] or "scenario").rstrip("_")
+
+
+def build_playwright_api_test_module(
+    *,
+    scenario: str,
+    endpoint: str,
+    http_method: HttpMethod,
+    expected_status: int,
+    response_json_keys: list[str] | None = None,
+    json_body: dict[str, Any] | None = None,
+) -> tuple[str, str]:
+    """
+    Return (filename, source_code).
+
+    Generated tests use sync Playwright APIRequestContext only (no browser/page).
+    """
+    slug = _slug(scenario)
+    fname = f"test_generated_{slug}.py"
+    method = http_method.lower()
+    if method not in {"get", "post", "patch", "delete", "put"}:
+        msg = f"Unsupported HTTP method: {http_method}"
+        raise ValueError(msg)
+    ep = endpoint if endpoint.startswith("/") else f"/{endpoint}"
+    keys = response_json_keys or []
+    keys_literal = repr(keys)
+    safe_doc = scenario.replace('"""', "'")
+
+    if json_body is not None and method in {"post", "patch", "put"}:
+        payload_literal = repr(json_body)
+        request_block = f"""
+import json
+payload = {payload_literal}
+response = api_request_context.{method}(
+    "{ep}",
+    data=json.dumps(payload),
+    headers={{"Content-Type": "application/json"}},
+)
+"""
+    else:
+        request_block = f'response = api_request_context.{method}("{ep}")\n'
+
+    assert_block = f"""
+assert response.status == {expected_status}, (
+    "Unexpected status "
+    f"{{response.status}} body={{response.text()[:500]!r}}"
+)
+"""
+    if keys:
+        assert_block += """
+data = response.json()
+"""
+        for k in keys:
+            assert_block += f'assert "{k}" in data, f"missing key {k!r} in {{data!r}}"\n'
+
+    inner = textwrap.dedent(request_block).strip() + "\n" + textwrap.dedent(assert_block).strip()
+    test_fn = (
+        f"def test_generated_{slug}(api_request_context):\n"
+        f'    """{safe_doc}"""\n' + textwrap.indent(inner, "    ") + "\n"
+    )
+
+    header = f'''"""
+Generated API test (Playwright sync APIRequestContext only).
+
+Scenario:
+{scenario}
+
+Endpoint: {http_method} {endpoint}
+Expected status: {expected_status}
+Optional JSON keys: {keys_literal}
+"""
+from __future__ import annotations
+
+import os
+
+import pytest
+from playwright.sync_api import sync_playwright
+
+pytestmark = pytest.mark.generated_api
+
+API_BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:8000")
+
+
+@pytest.fixture(scope="module")
+def api_request_context():
+    """Playwright APIRequestContext — no browser UI."""
+    with sync_playwright() as p:
+        ctx = p.request.new_context(base_url=API_BASE_URL)
+        yield ctx
+        ctx.dispose()
+
+
+'''
+    return fname, header + test_fn
+
+
+def build_generation_metadata(
+    *,
+    scenario: str,
+    endpoint: str,
+    http_method: str,
+    expected_status: int,
+    response_json_keys: list[str] | None,
+) -> dict[str, Any]:
+    return {
+        "scenario": scenario,
+        "endpoint": endpoint,
+        "http_method": http_method,
+        "expected_status": expected_status,
+        "response_json_keys": response_json_keys or [],
+        "generated_at": datetime.now(UTC).isoformat(),
+    }
